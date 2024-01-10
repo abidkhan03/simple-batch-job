@@ -21,8 +21,8 @@ export class SimpleBatchJobStack extends Stack {
 
     const vpc = Vpc.fromLookup(this, 'Vpc', { isDefault: true });
 
-    const ecrRepository = new Repository(this, 'BatchECR', {
-      repositoryName: 'batch-test-repo',
+    const ecrRepository = new Repository(this, 'BatchTestRepo', {
+      repositoryName: 'simple-batch-test-repo',
     });
 
     const dockerImage = new DockerImageAsset(this, 'BatchTestImage', {
@@ -102,7 +102,7 @@ export class SimpleBatchJobStack extends Stack {
         ManagedPolicy.fromAwsManagedPolicyName("service-role/AmazonECSTaskExecutionRolePolicy")]
     });
 
-    const repository = Repository.fromRepositoryName(this, 'BatchTestRepository', ecrRepository.repositoryName);
+    const repository = Repository.fromRepositoryName(this, 'simple-batch-test-repo', ecrRepository.repositoryName);
 
     // Allow to get and put s3 objects
     ecsRole.addToPrincipalPolicy(new PolicyStatement({
@@ -153,7 +153,7 @@ export class SimpleBatchJobStack extends Stack {
     exportScheduleRole.addTarget(new BatchJob(
       jobQueue.attrJobQueueArn,
       jobQueue, 
-      jobDefinition.parameters.arn,
+      jobDefinition.attrJobDefinitionArn,
       jobDefinition,
       {
         jobName: 'batch-export-job-' + Date.now().toString(),
@@ -162,7 +162,7 @@ export class SimpleBatchJobStack extends Stack {
 
     // Submit Job to Batch
     const submitJob = new BatchSubmitJob(this, 'SubmitJob', {
-      jobDefinitionArn: jobDefinition.parameters.arn,
+      jobDefinitionArn: jobDefinition.attrJobDefinitionArn,
       jobName: 'batch-submit-job-' + Date.now().toString(),
       jobQueueArn: jobQueue.attrJobQueueArn,
     });
