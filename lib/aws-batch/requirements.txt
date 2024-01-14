@@ -1,1 +1,4 @@
 pandas
+autots
+alpaca-py
+boto3

@@ -1,4 +1,4 @@
-import { Duration, Stack, StackProps } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
 import { CfnComputeEnvironment, CfnJobDefinition, CfnJobQueue } from 'aws-cdk-lib/aws-batch';
 import { SecurityGroup, SubnetType, Vpc } from 'aws-cdk-lib/aws-ec2';
 import { Repository } from 'aws-cdk-lib/aws-ecr';
@@ -7,12 +7,12 @@ import { ContainerImage } from 'aws-cdk-lib/aws-ecs';
 import { Rule, Schedule } from 'aws-cdk-lib/aws-events';
 import { BatchJob } from 'aws-cdk-lib/aws-events-targets';
 import { Effect, InstanceProfile, ManagedPolicy, PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
-import { DefinitionBody, StateMachine } from 'aws-cdk-lib/aws-stepfunctions';
+import { DefinitionBody, StateMachine, TaskInput } from 'aws-cdk-lib/aws-stepfunctions';
 import { BatchSubmitJob } from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import { DockerImageName, ECRDeployment } from 'cdk-ecr-deployment';
 import { Construct } from 'constructs';
 import { join } from 'path';
-// import * as sqs from 'aws-cdk-lib/aws-sqs';
+import { ALPACA_CONFIG } from './configuration';
 
 export class SimpleBatchJobStack extends Stack {
   private readonly dockerImageAssetPath: string = join(__dirname, './aws-batch');
@@ -21,12 +21,17 @@ export class SimpleBatchJobStack extends Stack {
 
     const vpc = Vpc.fromLookup(this, 'Vpc', { isDefault: true });
 
-    const ecrRepository = new Repository(this, 'BatchTestRepo', {
-      repositoryName: 'simple-batch-test-repo',
+    const ecrRepository = new Repository(this, 'StockBatchtRepo', {
+      repositoryName: 'stock-batch-test-repo',
+      removalPolicy: RemovalPolicy.DESTROY,
     });
 
-    const dockerImage = new DockerImageAsset(this, 'BatchTestImage', {
+    const dockerImage = new DockerImageAsset(this, 'BatchStockImage', {
       directory: this.dockerImageAssetPath,
+      buildArgs: {
+        'ALPACA_API_KEY': ALPACA_CONFIG.Prod.ALPACA_API_KEY,
+        'ALPACA_API_SECRET': ALPACA_CONFIG.Prod.ALPACA_API_SECRET
+      }
     });
 
     const ecsTaskRole = new Role(this, 'EcsTaskRole', {
@@ -67,7 +72,7 @@ export class SimpleBatchJobStack extends Stack {
       role: instanceComputeEnvRole
     });
 
-    const computeEnv = new CfnComputeEnvironment(this, 'testComputeEnv', {
+    const computeEnv = new CfnComputeEnvironment(this, 'StockComputeEnv1', {
       type: 'MANAGED',
       state: 'ENABLED',
       serviceRole: computeEnvRole.roleName,
@@ -82,9 +87,9 @@ export class SimpleBatchJobStack extends Stack {
       }
     });
 
-    const jobQueue = new CfnJobQueue(this, 'BatchTestjobQueue', {
-      jobQueueName: 'BatchTestjobQueue',
-      priority: 10,
+    const jobQueue = new CfnJobQueue(this, 'BatchStockjobQueue', {
+      jobQueueName: 'BatchStockJobQueueV1',
+      priority: 100,
       computeEnvironmentOrder: [
         {
           order: 1,
@@ -102,7 +107,7 @@ export class SimpleBatchJobStack extends Stack {
         ManagedPolicy.fromAwsManagedPolicyName("service-role/AmazonECSTaskExecutionRolePolicy")]
     });
 
-    const repository = Repository.fromRepositoryName(this, 'simple-batch-test-repo', ecrRepository.repositoryName);
+    const repository = Repository.fromRepositoryName(this, 'StockBatchRepo', ecrRepository.repositoryName);
 
     // Allow to get and put s3 objects
     ecsRole.addToPrincipalPolicy(new PolicyStatement({
@@ -114,27 +119,54 @@ export class SimpleBatchJobStack extends Stack {
       ]
     }));
 
-    const jobDefinition = new CfnJobDefinition(this, 'BatchTestJobDefinition', {
-      jobDefinitionName: 'batch-job-definition',
+    const jobDefinition = new CfnJobDefinition(this, 'BatchStockJobDefinition', {
+      jobDefinitionName: 'batch-job-definitionV1',
       platformCapabilities: ['EC2'],
       type: 'container',
       timeout: {
-        attemptDurationSeconds: 900,
+        attemptDurationSeconds: 3600,
       },
       containerProperties: {
         image: ContainerImage.fromEcrRepository(repository).imageName,
         jobRoleArn: ecsRole.roleArn,
         executionRoleArn: ecsRole.roleArn,
-        command: ['python', './main.py'],
+        command: [
+          'python', './stock_data.py',
+          // '--symbol', 'Ref::symbol',    // Referring to the payload keys
+          // '--start', 'Ref::start',
+          // '--end', 'Ref::end',
+          // '--timeframe', 'Ref::timeframe'
+        ],
+        // vcpus: 4,
+        // memory: 8192,
+        // runtimePlatform: {
+        // // Only for fargate configuration
+        //   cpuArchitecture: 'ARM64',
+        //   operatingSystemFamily: 'LINUX',
+        // },
+        environment: [
+          {
+            name: 'ALPACA_API_KEY',
+            value: ALPACA_CONFIG.Prod.ALPACA_API_KEY
+          },
+          {
+            name: 'ALPACA_API_SECRET',
+            value: ALPACA_CONFIG.Prod.ALPACA_API_SECRET
+          }
+        ],
         resourceRequirements: [
           {
-            value: '1',
+            value: '4',
             type: 'VCPU',
           },
           {
-            value: '2048',
+            value: '8192',
             type: 'MEMORY',
-          }
+          },
+          // {
+          //   value: '1',
+          //   type: 'GPU',
+          // }
         ],
         logConfiguration: {
           logDriver: 'awslogs',
@@ -143,16 +175,16 @@ export class SimpleBatchJobStack extends Stack {
     });
 
     // Schedules Batch Job
-    const exportScheduleRole = new Rule(this, 'batch-test-rule', {
+    const exportScheduleRole = new Rule(this, 'batch-stock-rule', {
       ruleName: 'batch-test-rule',
       description: 'This Rule Schedules the submission of Batch Jobs',
-      schedule: Schedule.cron({ minute: '50', hour: '19' }),
+      schedule: Schedule.cron({ minute: '16', hour: '10' }),
     })
 
     // Add a target to the rule
     exportScheduleRole.addTarget(new BatchJob(
       jobQueue.attrJobQueueArn,
-      jobQueue, 
+      jobQueue,
       jobDefinition.attrJobDefinitionArn,
       jobDefinition,
       {
@@ -163,8 +195,20 @@ export class SimpleBatchJobStack extends Stack {
     // Submit Job to Batch
     const submitJob = new BatchSubmitJob(this, 'SubmitJob', {
       jobDefinitionArn: jobDefinition.attrJobDefinitionArn,
-      jobName: 'batch-submit-job-' + Date.now().toString(),
+      jobName: 'batch-stock-job-' + Date.now().toString(),
       jobQueueArn: jobQueue.attrJobQueueArn,
+      // payload: TaskInput.fromObject({
+      //   'symbol.$': '$.symbol',
+      //   'start.$': '$.start',
+      //   'end.$': '$.end',
+      //   'timeframe.$': '$.timeframe',
+      // })
+      // payload: TaskInput.fromObject({
+      //   'symbol.$': TaskInput.fromJsonPathAt('$.symbol').value,
+      //   'start.$': TaskInput.fromJsonPathAt('$.start').value,
+      //   'end.$': TaskInput.fromJsonPathAt('$.end').value,
+      //   'timeframe.$': TaskInput.fromJsonPathAt('$.timeframe').value,
+      // })
     });
 
     const stateMachineRole = new Role(this, 'StateMachineRole', {
@@ -180,7 +224,7 @@ export class SimpleBatchJobStack extends Stack {
     const batchStateMachine = new StateMachine(this, 'BatchStateMachine', {
       definitionBody: DefinitionBody.fromChainable(submitJob),
       stateMachineName: 'BatchStateMachine',
-      timeout: Duration.minutes(30),
+      timeout: Duration.minutes(60),
       role: stateMachineRole,
     });
 

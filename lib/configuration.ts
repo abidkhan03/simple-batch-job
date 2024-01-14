@@ -5,3 +5,10 @@ export const ACCOUNT_CONFIG = {
         REGION: 'us-east-2',
     }
 }
+
+export const ALPACA_CONFIG = {
+    Prod: {
+        ALPACA_API_KEY: 'PKKBATPEGK51Y0FUV170',
+        ALPACA_API_SECRET: 'soZvm833djbWDPzaCdOxhk35TvWHRiYP2NPiXM6t',
+    }
+}
