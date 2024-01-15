@@ -132,10 +132,10 @@ export class SimpleBatchJobStack extends Stack {
         executionRoleArn: ecsRole.roleArn,
         command: [
           'python', './stock_data.py',
-          // '--symbol', 'Ref::symbol',    // Referring to the payload keys
-          // '--start', 'Ref::start',
-          // '--end', 'Ref::end',
-          // '--timeframe', 'Ref::timeframe'
+          '--symbol', 'Ref::symbol',    // Referring to the payload keys
+          '--start', 'Ref::start',
+          '--end', 'Ref::end',
+          '--timeframe', 'Ref::timeframe'
         ],
         // vcpus: 4,
         // memory: 8192,
@@ -163,10 +163,10 @@ export class SimpleBatchJobStack extends Stack {
             value: '8192',
             type: 'MEMORY',
           },
-          // {
-          //   value: '1',
-          //   type: 'GPU',
-          // }
+          {
+            value: '1',
+            type: 'GPU',
+          }
         ],
         logConfiguration: {
           logDriver: 'awslogs',
@@ -197,12 +197,12 @@ export class SimpleBatchJobStack extends Stack {
       jobDefinitionArn: jobDefinition.attrJobDefinitionArn,
       jobName: 'batch-stock-job-' + Date.now().toString(),
       jobQueueArn: jobQueue.attrJobQueueArn,
-      // payload: TaskInput.fromObject({
-      //   'symbol.$': '$.symbol',
-      //   'start.$': '$.start',
-      //   'end.$': '$.end',
-      //   'timeframe.$': '$.timeframe',
-      // })
+      payload: TaskInput.fromObject({
+        'symbol.$': '$.symbol',
+        'start.$': '$.start',
+        'end.$': '$.end',
+        'timeframe.$': '$.timeframe',
+      })
       // payload: TaskInput.fromObject({
       //   'symbol.$': TaskInput.fromJsonPathAt('$.symbol').value,
       //   'start.$': TaskInput.fromJsonPathAt('$.start').value,
