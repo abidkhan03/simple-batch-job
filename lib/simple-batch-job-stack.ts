@@ -80,8 +80,8 @@ export class SimpleBatchJobStack extends Stack {
         type: 'EC2',
         subnets: [vpc.publicSubnets[0].subnetId, vpc.publicSubnets[1].subnetId],
         securityGroupIds: [securityGroup.securityGroupId],
-        instanceTypes: ["optimal"],
-        minvCpus: 0,
+        instanceTypes: ["c5ad.2xlarge"],
+        minvCpus: 1,
         maxvCpus: 256,
         instanceRole: instanceComputeEnvProfile.instanceProfileArn,
       }
@@ -124,7 +124,7 @@ export class SimpleBatchJobStack extends Stack {
       platformCapabilities: ['EC2'],
       type: 'container',
       timeout: {
-        attemptDurationSeconds: 3600,
+        attemptDurationSeconds: 14400,
       },
       containerProperties: {
         image: ContainerImage.fromEcrRepository(repository).imageName,
@@ -156,11 +156,11 @@ export class SimpleBatchJobStack extends Stack {
         ],
         resourceRequirements: [
           {
-            value: '4',
+            value: '8',
             type: 'VCPU',
           },
           {
-            value: '8192',
+            value: '16384',
             type: 'MEMORY',
           },
           {
@@ -224,7 +224,7 @@ export class SimpleBatchJobStack extends Stack {
     const batchStateMachine = new StateMachine(this, 'BatchStateMachine', {
       definitionBody: DefinitionBody.fromChainable(submitJob),
       stateMachineName: 'BatchStateMachine',
-      timeout: Duration.minutes(60),
+      timeout: Duration.minutes(240),
       role: stateMachineRole,
     });
 
