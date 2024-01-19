@@ -94,7 +94,7 @@ def lambda_handler(event, context):
             ensemble='all',
             model_list=model_list,
             max_generations=15,
-            validation_method='backwards',
+            # validation_method='backwards',
             # n_jobs=1,
             num_validations=2,
             transformer_list='all',
@@ -111,8 +111,8 @@ def lambda_handler(event, context):
         # Predict the next one month of hourly stock prices
         prediction = model.predict(forecast_length=720)
 
-        model_results = model.results()
-        logger.info(f'model results: {model_results}')
+        # model_results = model.results()
+        # logger.info(f'model results: {model_results}')
 
         # Convert the prediction to a DataFrame for easier handling
         forecast = prediction.forecast
